@@ -1,0 +1,16 @@
+.env
+credentials.json
+service_account.json
+token.json
+ffmpeg.exe
+*.exe
+*.mp3
+*.wav
+*.m4a
+*.mp4
+downloads/
+temp/
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
