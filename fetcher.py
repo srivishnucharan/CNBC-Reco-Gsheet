@@ -16,21 +16,20 @@ logger = logging.getLogger(__name__)
 DEFAULT_LIVE_URL = "https://www.youtube.com/@cnbcawaaz/live"
 
 
-def get_ffmpeg_path() -> Optional[str]:
-    """Retrieves path to ffmpeg executable."""
+def get_ffmpeg_path() -> str:
+    """Retrieves path to ffmpeg executable on Linux and Windows."""
+    import shutil
+    system_ffmpeg = shutil.which("ffmpeg")
+    if system_ffmpeg:
+        return system_ffmpeg
     local_exe = os.path.join(os.getcwd(), "ffmpeg.exe")
     if os.path.exists(local_exe):
         return local_exe
     try:
         import imageio_ffmpeg
-        src = imageio_ffmpeg.get_ffmpeg_exe()
-        dst = os.path.join(os.path.dirname(src), "ffmpeg.exe")
-        if not os.path.exists(dst):
-            import shutil
-            shutil.copyfile(src, dst)
-        return dst
+        return imageio_ffmpeg.get_ffmpeg_exe()
     except Exception:
-        return None
+        return "ffmpeg"
 
 
 def extract_video_id(url: str) -> Optional[str]:
@@ -108,10 +107,12 @@ class YouTubeFetcher:
             "-f", "ba[ext=m4a]/ba/b",
             "--downloader", "ffmpeg",
             "--downloader-args", f"ffmpeg_i:-t {duration_minutes * 60}",
-            "--ffmpeg-location", os.path.dirname(ffmpeg_exe),
             "-o", output_template,
             video_url
         ]
+        if ffmpeg_exe and os.path.dirname(ffmpeg_exe):
+            cmd.insert(6, os.path.dirname(ffmpeg_exe))
+            cmd.insert(6, "--ffmpeg-location")
 
         try:
             result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True, timeout=180)
