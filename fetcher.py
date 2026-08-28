@@ -4,6 +4,7 @@ Uses embedded ffmpeg and yt-dlp to capture audio streams and transcripts.
 """
 
 import os
+import sys
 import subprocess
 import logging
 import tempfile
@@ -98,10 +99,9 @@ class YouTubeFetcher:
         timestamp = int(time.time())
         output_template = os.path.join(self.output_dir, f"{output_prefix}_{timestamp}.%(ext)s")
 
-        logger.info(f"Downloading direct audio segment ({duration_minutes} mins) from video: {video_url}")
-        ffmpeg_exe = get_ffmpeg_path()
+        ffmpeg_exe = self.ffmpeg_path or get_ffmpeg_path()
         cmd = [
-            "yt-dlp",
+            sys.executable, "-m", "yt_dlp",
             "--no-warnings",
             "--extractor-args", "youtube:player_client=android,web",
             "-f", "ba[ext=m4a]/ba/b",
@@ -111,8 +111,8 @@ class YouTubeFetcher:
             video_url
         ]
         if ffmpeg_exe and os.path.dirname(ffmpeg_exe):
-            cmd.insert(6, os.path.dirname(ffmpeg_exe))
-            cmd.insert(6, "--ffmpeg-location")
+            cmd.insert(8, os.path.dirname(ffmpeg_exe))
+            cmd.insert(8, "--ffmpeg-location")
 
         try:
             result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True, timeout=180)
@@ -153,8 +153,9 @@ class YouTubeFetcher:
             f"Capturing trailing {duration_minutes} mins ({duration_seconds}s) from {live_url}..."
         )
 
+        ffmpeg_exe = self.ffmpeg_path or get_ffmpeg_path()
         cmd = [
-            "yt-dlp",
+            sys.executable, "-m", "yt_dlp",
             "--no-warnings",
             "--extractor-args", "youtube:player_client=android,web",
             "--live-from-start=false",
@@ -167,10 +168,25 @@ class YouTubeFetcher:
             live_url
         ]
 
-        if self.ffmpeg_path:
-            cmd.extend(["--ffmpeg-location", os.path.dirname(self.ffmpeg_path)])
+        if ffmpeg_exe and os.path.dirname(ffmpeg_exe):
+            cmd.insert(8, os.path.dirname(ffmpeg_exe))
+            cmd.insert(8, "--ffmpeg-location")
 
-        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=duration_seconds + 120)
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True, timeout=duration_seconds + 120)
+
+        # Look for the generated mp3/m4a/part file
+        for fname in os.listdir(self.output_dir):
+            if fname.startswith(f"{output_prefix}_{timestamp}"):
+                full_p = os.path.join(self.output_dir, fname)
+                if fname.endswith(".part") and os.path.getsize(full_p) > 300 * 1024:
+                    final_p = full_p[:-5]
+                    if os.path.exists(final_p):
+                        os.remove(final_p)
+                    os.rename(full_p, final_p)
+                    logger.info(f"Recovered live audio chunk: {final_p} (Size: {os.path.getsize(final_p)} bytes)")
+                    return final_p
+                elif not fname.endswith(".part") and os.path.getsize(full_p) > 300 * 1024:
+                    return full_p
 
         if not os.path.exists(output_path):
             raise RuntimeError(f"Failed to capture live audio buffer from {live_url}.")
