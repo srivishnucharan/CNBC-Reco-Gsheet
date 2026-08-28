@@ -47,6 +47,35 @@ class YouTubeFetcher:
         if self.ffmpeg_path:
             logger.debug(f"Using ffmpeg at: {self.ffmpeg_path}")
 
+    def get_latest_stream_urls(self, limit: int = 5) -> List[Tuple[str, str]]:
+        """
+        Discovers recent live stream broadcast URLs and titles from @cnbcawaaz/streams.
+        Returns: list of (video_url, title)
+        """
+        try:
+            import json
+            cmd = [
+                sys.executable, "-m", "yt_dlp",
+                "--flat-playlist",
+                "--playlist-items", f"1:{limit}",
+                "-J",
+                "https://www.youtube.com/@cnbcawaaz/streams"
+            ]
+            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=60)
+            if res.returncode == 0 and res.stdout.strip():
+                data = json.loads(res.stdout)
+                entries = data.get("entries", [])
+                results = []
+                for e in entries:
+                    vid_id = e.get("id")
+                    title = e.get("title", "")
+                    if vid_id:
+                        results.append((f"https://www.youtube.com/watch?v={vid_id}", title))
+                return results
+        except Exception as e:
+            logger.warning(f"Failed to discover latest stream URLs: {e}")
+        return []
+
     def fetch_transcript(self, video_url: str) -> Optional[str]:
         """
         Attempts to fetch closed-captions / automated Hindi/English transcripts.

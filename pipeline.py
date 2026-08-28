@@ -88,14 +88,31 @@ class CNBCPipeline:
         cleanup: bool = True
     ) -> Tuple[List[StockCall], int, int]:
         """
-        Ingests the trailing live audio chunk and pushes calls to Google Sheets.
+        Ingests trailing live audio chunk, falling back to active broadcast stream discovery if live capture fails.
         """
         logger.info(f"=== Live Segment Trigger: '{segment_name}' ({duration_minutes} mins buffer) ===")
-        audio_path = self.fetcher.fetch_live_trailing_audio(
-            live_url=live_url,
-            duration_minutes=duration_minutes,
-            output_prefix=segment_name.replace(" ", "_").lower()
-        )
+        audio_path = None
+        try:
+            audio_path = self.fetcher.fetch_live_trailing_audio(
+                live_url=live_url,
+                duration_minutes=duration_minutes,
+                output_prefix=segment_name.replace(" ", "_").lower()
+            )
+        except Exception as le:
+            logger.warning(f"Direct live buffer capture failed ({le}). Attempting stream discovery fallback...")
+            streams = self.fetcher.get_latest_stream_urls(limit=4)
+            for s_url, s_title in streams:
+                logger.info(f"Trying discovered broadcast stream: {s_title} ({s_url})")
+                try:
+                    return self.process_video_url(
+                        video_url=s_url,
+                        segment_name=segment_name,
+                        duration_minutes=duration_minutes,
+                        cleanup=cleanup
+                    )
+                except Exception as ve:
+                    logger.warning(f"Failed processing stream {s_url}: {ve}")
+            raise le
 
         try:
             return self.process_audio_file(
@@ -103,7 +120,7 @@ class CNBCPipeline:
                 segment_name=segment_name
             )
         finally:
-            if cleanup and os.path.exists(audio_path):
+            if cleanup and audio_path and os.path.exists(audio_path):
                 self.fetcher.cleanup(audio_path)
 
     def process_video_url(
