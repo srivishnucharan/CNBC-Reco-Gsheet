@@ -9,7 +9,7 @@ from typing import List, Optional, Tuple, Dict, Any
 import pytz
 from dotenv import load_dotenv
 
-from models import StockCall
+from schema import StockCall
 
 load_dotenv()
 logger = logging.getLogger(__name__)
