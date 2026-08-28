@@ -47,12 +47,19 @@ class YouTubeFetcher:
         if self.ffmpeg_path:
             logger.debug(f"Using ffmpeg at: {self.ffmpeg_path}")
         
-        cookie_cand = os.getenv("YOUTUBE_COOKIES_FILE") or os.path.join(os.getcwd(), "cookies.txt")
-        if os.path.exists(cookie_cand):
-            self.cookies_path = cookie_cand
-            logger.info(f"Using YouTube cookies: {self.cookies_path}")
-        else:
-            self.cookies_path = None
+        cookie_candidates = [
+            os.getenv("YOUTUBE_COOKIES_FILE"),
+            os.path.join(os.getcwd(), "cookies.txt"),
+            os.path.join(os.getcwd(), "www.youtube.com_cookies.txt"),
+            os.path.join(os.getcwd(), "www.youtube.com_cookies.text"),
+            "/opt/cnbc-reco-gsheet/cookies.txt"
+        ]
+        self.cookies_path = None
+        for cand in cookie_candidates:
+            if cand and os.path.exists(cand):
+                self.cookies_path = cand
+                logger.info(f"Using YouTube cookies: {self.cookies_path}")
+                break
 
     def get_latest_stream_urls(self, limit: int = 5) -> List[Tuple[str, str]]:
         """
@@ -139,6 +146,7 @@ class YouTubeFetcher:
         cmd = [
             sys.executable, "-m", "yt_dlp",
             "--no-warnings",
+            "--remote-components", "ejs:github",
             "--extractor-args", "youtube:player_client=android,web",
             "-f", "ba[ext=m4a]/ba/b",
             "--downloader", "ffmpeg",
@@ -196,6 +204,7 @@ class YouTubeFetcher:
         cmd = [
             sys.executable, "-m", "yt_dlp",
             "--no-warnings",
+            "--remote-components", "ejs:github",
             "--extractor-args", "youtube:player_client=android,web",
             "--live-from-start=false",
             "--downloader", "ffmpeg",
