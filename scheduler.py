@@ -10,10 +10,12 @@ from datetime import datetime
 import pytz
 import schedule
 from pipeline import CNBCPipeline
+from telegram_bot import TelegramNotifier, TelegramCommandBot
 
 logger = logging.getLogger(__name__)
 
 IST = pytz.timezone("Asia/Kolkata")
+notifier = TelegramNotifier()
 
 # Predefined schedule execution map (IST)
 SCHEDULE_JOBS = [
@@ -77,16 +79,34 @@ def execute_job(pipeline: CNBCPipeline, job_config: dict):
             f"=== Job Finished: {job_config['segment_name']} -> {len(calls)} extracted, "
             f"{inserted} inserted into Sheets, {skipped} skipped duplicates ==="
         )
+        # Send Telegram notification on successful run
+        notifier.send_run_summary(
+            segment_name=job_config["segment_name"],
+            calls=calls,
+            inserted=inserted,
+            skipped=skipped
+        )
     except Exception as e:
         logger.error(f"Error during scheduled execution of {job_config['segment_name']}: {e}", exc_info=True)
+        notifier.send_run_summary(
+            segment_name=job_config["segment_name"],
+            calls=[],
+            inserted=0,
+            skipped=0,
+            error_msg=str(e)
+        )
 
 
 def start_scheduler(pipeline: Optional[CNBCPipeline] = None):
     """
-    Registers all daily market jobs and starts the scheduler daemon.
+    Registers all daily market jobs and starts the scheduler daemon with Telegram bot commands.
     """
     if pipeline is None:
         pipeline = CNBCPipeline()
+
+    # Start Telegram on-demand command listener in background
+    bot = TelegramCommandBot(pipeline=pipeline, scheduler=schedule)
+    bot.start()
 
     logger.info("Initializing CNBC Awaaz Market Scheduler...")
     logger.info(f"Current IST Time: {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S %Z')}")
@@ -100,3 +120,4 @@ def start_scheduler(pipeline: Optional[CNBCPipeline] = None):
     while True:
         schedule.run_pending()
         time.sleep(10)
+

@@ -46,6 +46,13 @@ class YouTubeFetcher:
         self.ffmpeg_path = get_ffmpeg_path()
         if self.ffmpeg_path:
             logger.debug(f"Using ffmpeg at: {self.ffmpeg_path}")
+        
+        cookie_cand = os.getenv("YOUTUBE_COOKIES_FILE") or os.path.join(os.getcwd(), "cookies.txt")
+        if os.path.exists(cookie_cand):
+            self.cookies_path = cookie_cand
+            logger.info(f"Using YouTube cookies: {self.cookies_path}")
+        else:
+            self.cookies_path = None
 
     def get_latest_stream_urls(self, limit: int = 5) -> List[Tuple[str, str]]:
         """
@@ -142,6 +149,9 @@ class YouTubeFetcher:
         if ffmpeg_exe and os.path.dirname(ffmpeg_exe):
             cmd.insert(8, os.path.dirname(ffmpeg_exe))
             cmd.insert(8, "--ffmpeg-location")
+        if self.cookies_path:
+            cmd.insert(8, self.cookies_path)
+            cmd.insert(8, "--cookies")
 
         try:
             result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True, timeout=180)
@@ -200,6 +210,9 @@ class YouTubeFetcher:
         if ffmpeg_exe and os.path.dirname(ffmpeg_exe):
             cmd.insert(8, os.path.dirname(ffmpeg_exe))
             cmd.insert(8, "--ffmpeg-location")
+        if self.cookies_path:
+            cmd.insert(8, self.cookies_path)
+            cmd.insert(8, "--cookies")
 
         subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True, timeout=duration_seconds + 120)
 
